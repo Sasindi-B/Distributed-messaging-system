@@ -1,0 +1,31 @@
+ [build-system]
+ requires = ["hatchling>=1.18"]
+ build-backend = "hatchling.build"
+
+ [project]
+ name = "ds-messaging-system"
+ version = "0.1.0"
+ description = "Fault-tolerant distributed messaging system"
+ readme = "README.md"
+ requires-python = ">=3.11"
+ license = { file = "LICENSE" }
+ authors = [
+   { name = "Distributed-messaging-system contributors" }
+ ]
+ dependencies = []
+
+ [project.optional-dependencies]
+ dev = [
+   "ruff>=0.5.0",
+   "pytest>=8.0.0"
+ ]
+
+ [project.urls]
+ Homepage = "https://example.com"
+
+ [tool.hatch.build.targets.wheel]
+ packages = ["src/ds_messaging"]
+
+ [tool.pytest.ini_options]
+ testpaths = ["tests"]
+

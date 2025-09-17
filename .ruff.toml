@@ -1,0 +1,28 @@
+# Ruff configuration for Distributed Messaging System
+
+line-length = 88
+target-version = "py311"
+src = ["src", "tests"]
+
+[lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "W",  # pycodestyle warnings
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # line length handled by formatter
+]
+
+[lint.isort]
+known-first-party = ["ds_messaging"]
+combine-as-imports = true
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
