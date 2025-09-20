@@ -1,0 +1,611 @@
+{
+	"info": {
+		"_postman_id": "f94c697d-2589-44e5-8e03-f62d1e204ded",
+		"name": "Distributed Messaging System - Fault Tolerance Tests",
+		"description": "Comprehensive tests demonstrating complete fault tolerance implementation",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "44478037"
+	},
+	"item": [
+		{
+			"name": "0. System Status & Monitoring",
+			"item": [
+				{
+					"name": "Check Node Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status endpoint working\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.response.to.have.jsonBody('node_id');",
+									"    pm.response.to.have.jsonBody('peer_status');",
+									"    console.log('Node status:', pm.response.json());",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/status",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"status"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "1. Health Check & Setup",
+			"item": [
+				{
+					"name": "Start Node 1",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Start Node 2",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8001",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Start Node 3",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8002/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8002",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Start Quorum Node 4",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8003/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8003",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Basic Message Operations & Replication",
+			"item": [
+				{
+					"name": "Send Message to Node 1 (Async)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Message sent successfully\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.response.to.have.jsonBody('status', 'ok');",
+									"    pm.response.to.have.jsonBody('msg_id');",
+									"    pm.collectionVariables.set(\"test_msg_id\", pm.response.json().msg_id);",
+									"    console.log('Message ID:', pm.response.json().msg_id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"sender\": \"user1\",\n    \"recipient\": \"user2\",\n    \"payload\": \"Hello from Postman test!\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8000/send",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"send"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Replication to Node 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Message replicated to Node 2\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    var messages = pm.response.json().messages;",
+									"    var found = messages.some(msg => msg.msg_id === pm.collectionVariables.get(\"test_msg_id\"));",
+									"    pm.expect(found).to.be.true;",
+									"    console.log('Replication verified to Node 2');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/messages",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8001",
+							"path": [
+								"messages"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Replication to Node 3",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8002/messages",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8002",
+							"path": [
+								"messages"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Failure Detection & Recovery Tests",
+			"item": [
+				{
+					"name": "Check Status Before Failure",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/status",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Stop Node 2 (Simulate Failure)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8001",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Wait 10 seconds (Timeout Period)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Check Status After Failure Detection",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/status",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Send Message During Failure",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Message sent during failure\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.collectionVariables.set(\"failure_msg_id\", pm.response.json().msg_id);",
+									"    console.log('Message during failure:', pm.response.json().msg_id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"sender\": \"user1\",\n    \"recipient\": \"user2\",\n    \"payload\": \"Message sent during Node 2 failure!\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8000/send",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"send"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Restart Node 2",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8001",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Node 2 Recovery & Sync",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Node 2 recovered missing messages\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    var messages = pm.response.json().messages;",
+									"    var found = messages.some(msg => msg.msg_id === pm.collectionVariables.get(\"failure_msg_id\"));",
+									"    pm.expect(found).to.be.true;",
+									"    console.log('Recovery successful: Node 2 has all messages');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/messages",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8001",
+							"path": [
+								"messages"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Quorum Replication Tests",
+			"item": [
+				{
+					"name": "Quorum Success - All Nodes Up",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Quorum success with all nodes up\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.response.to.have.jsonBody('status', 'ok');",
+									"    console.log('Quorum success: All nodes available');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"sender\": \"user1\",\n    \"recipient\": \"user2\",\n    \"payload\": \"Quorum success test - all nodes available\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8003/send",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8003",
+							"path": [
+								"send"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Quorum Failure - Stop One Node",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8001/heartbeat",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8001",
+							"path": [
+								"heartbeat"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Wait for Failure Detection",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/status",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Try Quorum Send - Should Fail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Quorum rejection works\", function() {",
+									"    pm.response.to.have.status(503);",
+									"    pm.response.to.have.jsonBody('status', 'error');",
+									"    pm.response.to.have.jsonBody('reason', 'replication quorum not achieved');",
+									"    console.log('Quorum failure correctly detected');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"sender\": \"user1\",\n    \"recipient\": \"user2\",\n    \"payload\": \"Should fail - not enough nodes\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8003/send",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8003",
+							"path": [
+								"send"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. Direct Replication Test",
+			"item": [
+				{
+					"name": "Direct Replicate to Node 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Direct replication successful\", function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.response.to.have.jsonBody('status', 'ok');",
+									"    console.log('Direct replication worked');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"msg\": {\n        \"msg_id\": \"direct-test-123\",\n        \"sender\": \"system\",\n        \"recipient\": \"all\",\n        \"payload\": \"Direct replication test\",\n        \"ts\": {{$timestamp}}\n    }\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8000/replicate",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"replicate"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "test_msg_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "failure_msg_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
