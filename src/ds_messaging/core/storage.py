@@ -1,5 +1,6 @@
 import aiosqlite
 import time
+from src.ds_messaging.failure.detector import FailureDetector  # Add this import
 
 DB_FILE = "messages.db"
 
@@ -18,6 +19,7 @@ SELECT_SINCE = "SELECT seq, msg_id, sender, recipient, payload, ts FROM messages
 SELECT_MAX_SEQ = "SELECT IFNULL(MAX(seq), 0) FROM messages;"
 INSERT_MSG = "INSERT OR IGNORE INTO messages (msg_id, sender, recipient, payload, ts) VALUES (?, ?, ?, ?, ?);"
 
+
 class Node:
     def __init__(self, host, port, node_id, peers, replication_quorum=1, replication_mode='async'):
         self.host = host
@@ -25,7 +27,10 @@ class Node:
         self.node_id = node_id
         self.base_url = f"http://{host}:{port}"
         self.peers = peers[:]  # list of peer base URLs
-        self.peer_status = {p: {"last_ok": 0.0, "alive": False} for p in self.peers}
+
+        # Add FailureDetector
+        self.failure_detector = FailureDetector(peers)
+
         self.replication_mode = replication_mode  # 'async' or 'sync_quorum'
         self.replication_quorum = replication_quorum
         self.db_file = f"{DB_FILE}.{port}"

@@ -1,7 +1,9 @@
+import logging
+logger = logging.getLogger(__name__)
 from aiohttp import web
 import time
 import uuid
-from replication import replicate_to_peers, replicate_with_quorum
+from .replication import replicate_to_peers, replicate_with_quorum  # Changed to relative import
 
 async def send_handler(request):
     node = request.app['node']
@@ -15,6 +17,8 @@ async def send_handler(request):
         "ts": payload.get("ts", time.time())
     }
     seq = await node.store_message(msg)
+    logger.info(f"Message stored: {msg_id}, seq: {seq}, replicating to {len(node.peers)} peers")
+
     if node.peers:
         if node.replication_mode == 'async':
             request.app.loop.create_task(replicate_to_peers(node, msg))
@@ -51,3 +55,14 @@ async def messages_handler(request):
     return web.json_response({"messages": [
         {"seq": r[0], "msg_id": r[1], "sender": r[2], "recipient": r[3], "payload": r[4], "ts": r[5]} for r in rows
     ]})
+async def status_handler(request):
+    node = request.app['node']
+    status = {
+        "node_id": node.node_id,
+        "port": node.port,
+        "peers": node.peers,
+        "peer_status": node.failure_detector.peer_status,
+        "replication_mode": node.replication_mode,
+        "quorum": node.replication_quorum
+    }
+    return web.json_response(status)
