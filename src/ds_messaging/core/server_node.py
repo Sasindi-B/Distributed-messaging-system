@@ -6,9 +6,11 @@ from aiohttp import web
 import asyncio
 from src.ds_messaging.core.storage import Node
 from src.ds_messaging.failure.heartbeat import heartbeat_task, rejoin_sync
+from src.ds_messaging.failure.consensus import Consensus
 from src.ds_messaging.failure.api import (
     send_handler, replicate_handler, heartbeat_handler,
-    sync_handler, messages_handler, status_handler
+    sync_handler, messages_handler, status_handler,
+    request_vote_handler, append_entries_handler
 )
 
 def make_app(node: Node):
@@ -18,6 +20,8 @@ def make_app(node: Node):
         web.post('/send', send_handler),
         web.post('/replicate', replicate_handler),
         web.get('/heartbeat', heartbeat_handler),
+        web.post('/request_vote', request_vote_handler),
+        web.post('/append_entries', append_entries_handler),
         web.post('/sync', sync_handler),
         web.get('/messages', messages_handler),
         web.get('/status', status_handler),
@@ -31,6 +35,9 @@ async def on_startup(app):
     # Fix deprecated loop usage
     asyncio.create_task(rejoin_sync(node))
     asyncio.create_task(heartbeat_task(app))
+    # Start consensus timers
+    node.consensus = Consensus(node)
+    node.consensus.start()
 
 def parse_args():
     parser = argparse.ArgumentParser()
