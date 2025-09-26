@@ -12,7 +12,6 @@ It is designed to simulate the core principles of real-world distributed messagi
 
 - Producers can publish messages to specific topics.
 - Consumers can fetch messages from those topics.
-- ZooKeeper handles coordination tasks such as service discovery, configuration management, and leader election.
 - Backend (FastAPI) exposes REST APIs for producers and consumers to interact with the system.
 - Frontend (React) provides a user-friendly interface for sending and viewing messages.
 - Docker Compose ensures the entire system (backend, frontend, ZooKeeper) can be run with a single command.
@@ -72,6 +71,7 @@ Quick test
 - Status: `curl http://127.0.0.1:8000/status`
 - Send: `curl -X POST http://127.0.0.1:8000/send -H "Content-Type: application/json" -d "{\"payload\":\"hi\"}"`
 - Read: `curl http://127.0.0.1:8001/messages`
+  go up \to 5 nodes
 
 Troubleshooting
 
