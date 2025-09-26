@@ -78,3 +78,36 @@ Troubleshooting
 - "python not found" → install Python 3.11/3.12; uncheck Windows Store alias; reopen terminal
 - aiosqlite/aiohttp missing → `python -m pip install aiohttp aiosqlite`
 - Import error for `src.*` → run from repo root or set `PYTHONPATH` to the repo root
+
+## Simple React Frontend
+
+A lightweight React dashboard lives in the `frontend/` folder. It talks to the running node over the public REST API (`/status`, `/send`, `/messages`) and requires no build tooling.
+
+### Run it locally
+
+1. Start your cluster nodes (3 or 5 terminals as described above).
+2. From the repo root, serve the static files (PowerShell example):
+   ```powershell
+   python -m http.server 5173 --directory frontend
+   ```
+   The port is arbitrary; pick any free port if 5173 is busy.
+3. Open `http://127.0.0.1:5173` in the browser.
+
+### What you can do
+
+- Inspect node metadata, consensus term/role, and peer liveness.
+- Compose and send custom messages (sender, recipient, payload, optional message ID).
+- Watch the replicated log update in real time (auto-refresh can be toggled).
+- Point the UI at any node by changing the "Base API URL" field.
+### Run it with npm
+
+Alternatively, from `frontend/` you can do:
+```powershell
+npm install
+npm start
+```
+This uses the `python -m http.server` script behind the scenes, so ensure `python` resolves in your shell.
+Or run the familiar alias:
+```powershell
+npm run dev
+```
