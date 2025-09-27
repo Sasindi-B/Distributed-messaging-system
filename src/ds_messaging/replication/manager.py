@@ -1,18 +1,49 @@
-from src.ds_messaging.replication import Replicator
+import logging
+from src.ds_messaging.failure.replication import replicate_to_peers, replicate_with_quorum
+
+logger = logging.getLogger(__name__)
 
 class ReplicationManager:
     """
-    Orchestrates replication according to mode (async or quorum).
+    Orchestrates replication according to the node's mode (async or quorum).
     """
 
-    def __init__(self, peers, quorum=2, mode="async"):
-        self.peers = peers
-        self.quorum = quorum
-        self.mode = mode
-        self.replicator = Replicator(peers, quorum, mode)
+    def __init__(self, node):
+        """
+        :param node: Node object with peers, replication_mode, replication_quorum
+        """
+        self.node = node
 
-    async def replicate_message(self, message: dict) -> bool:
+    async def replicate_message(self, msg, loop=None):
         """
-        Replicate a message and return True if commit condition is satisfied.
+        Replicate a message to peers depending on replication mode.
+
+        :param msg: message dict to replicate
+        :param loop: optional asyncio loop (for async fire-and-forget)
+        :return: True if committed (quorum) or always True (async)
         """
-        return await self.replicator.replicate_to_followers(message)
+        if not self.node.peers:
+            logger.info("No peers configured, skipping replication.")
+            return True
+
+        if self.node.replication_mode == 'async':
+            # Fire-and-forget replication
+            if loop:
+                loop.create_task(replicate_to_peers(self.node, msg))
+            else:
+                import asyncio
+                asyncio.create_task(replicate_to_peers(self.node, msg))
+            return True
+
+        elif self.node.replication_mode == 'sync_quorum':
+            # Wait for quorum acknowledgments
+            ok = await replicate_with_quorum(self.node, msg)
+            if ok:
+                logger.info("Quorum replication successful.")
+            else:
+                logger.warning("Quorum replication failed.")
+            return ok
+
+        else:
+            logger.error(f"Unknown replication mode: {self.node.replication_mode}")
+            return False
