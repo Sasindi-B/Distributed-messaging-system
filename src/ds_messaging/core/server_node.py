@@ -6,13 +6,17 @@ logger = logging.getLogger(__name__)
 import argparse
 from aiohttp import web
 import asyncio
+
+
+
 from src.ds_messaging.core.storage import Node
 from src.ds_messaging.failure.heartbeat import heartbeat_task, rejoin_sync
 from src.ds_messaging.failure.api import (
     send_handler, replicate_handler, heartbeat_handler,
     sync_handler, messages_handler, status_handler
 )
-from src.ds_messaging.core import RedundancyHandler
+
+from src.ds_messaging.replication.redundancy import RedundancyHandler
 
 
 def make_app(node: Node):
