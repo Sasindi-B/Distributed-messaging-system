@@ -11,24 +11,46 @@ import asyncio
 
 from src.ds_messaging.core.storage import Node
 from src.ds_messaging.failure.heartbeat import heartbeat_task, rejoin_sync
+from src.ds_messaging.failure.consensus import Consensus
 from src.ds_messaging.failure.api import (
     send_handler, replicate_handler, heartbeat_handler,
-    sync_handler, messages_handler, status_handler
+    sync_handler, messages_handler, status_handler,
+    request_vote_handler, append_entries_handler
 )
 
 from src.ds_messaging.replication.redundancy import RedundancyHandler
+
+ALLOWED_CORS_METHODS = "GET,POST,OPTIONS"
+ALLOWED_CORS_HEADERS = "Content-Type,Accept"
+
+@web.middleware
+async def cors_middleware(request, handler):
+    if request.method == "OPTIONS":
+        response = web.Response(status=204)
+    else:
+        response = await handler(request)
+    origin = request.headers.get("Origin")
+    response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    response.headers["Access-Control-Allow-Methods"] = ALLOWED_CORS_METHODS
+    response.headers["Access-Control-Allow-Headers"] = ALLOWED_CORS_HEADERS
+    response.headers["Access-Control-Max-Age"] = "86400"
+    return response
+
+
 
 
 def make_app(node: Node):
     """
     Build aiohttp app and register routes.
     """
-    app = web.Application()
+    app = web.Application(middlewares=[cors_middleware])
     app['node'] = node
     app.add_routes([
         web.post('/send', send_handler),
         web.post('/replicate', replicate_handler),
         web.get('/heartbeat', heartbeat_handler),
+        web.post('/request_vote', request_vote_handler),
+        web.post('/append_entries', append_entries_handler),
         web.post('/sync', sync_handler),
         web.get('/messages', messages_handler),
         web.get('/status', status_handler),
@@ -47,6 +69,9 @@ async def on_startup(app):
     # Start failure detection
     asyncio.create_task(rejoin_sync(node))
     asyncio.create_task(heartbeat_task(app))
+    # Start consensus timers
+    node.consensus = Consensus(node)
+    node.consensus.start()
 
     # Start redundancy catch-up
     redundancy = RedundancyHandler(node)
@@ -83,3 +108,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

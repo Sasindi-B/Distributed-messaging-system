@@ -3,7 +3,7 @@ logger = logging.getLogger(__name__)
 from aiohttp import web
 import time
 import uuid
-from .replication import replicate_to_peers, replicate_with_quorum  # relative import
+from src.ds_messaging.failure.replication import replicate_to_peers, replicate_with_quorum
 
 # ---------------------------
 # /send : Producers publish
@@ -95,6 +95,28 @@ async def status_handler(request):
         "peers": node.peers,
         "peer_status": node.failure_detector.peer_status,
         "replication_mode": node.replication_mode,
-        "quorum": node.replication_quorum
+        "quorum": node.replication_quorum,
+        "consensus": {
+            "role": node.role,
+            "current_term": node.current_term,
+            "voted_for": node.voted_for,
+            "leader_id": node.leader_id,
+            "leader_url": node.leader_url,
+        }
     }
     return web.json_response(status)
+
+
+# --- Consensus RPC handlers ---
+async def request_vote_handler(request):
+    node = request.app['node']
+    payload = await request.json()
+    resp = await node.consensus.handle_request_vote(payload)
+    return web.json_response(resp)
+
+
+async def append_entries_handler(request):
+    node = request.app['node']
+    payload = await request.json()
+    resp = await node.consensus.handle_append_entries(payload)
+    return web.json_response(resp)
