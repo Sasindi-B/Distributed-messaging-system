@@ -1,9 +1,14 @@
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 import argparse
 from aiohttp import web
 import asyncio
+
+
+
 from src.ds_messaging.core.storage import Node
 from src.ds_messaging.failure.heartbeat import heartbeat_task, rejoin_sync
 from src.ds_messaging.failure.consensus import Consensus
@@ -13,8 +18,32 @@ from src.ds_messaging.failure.api import (
     request_vote_handler, append_entries_handler
 )
 
+from src.ds_messaging.replication.redundancy import RedundancyHandler
+
+ALLOWED_CORS_METHODS = "GET,POST,OPTIONS"
+ALLOWED_CORS_HEADERS = "Content-Type,Accept"
+
+@web.middleware
+async def cors_middleware(request, handler):
+    if request.method == "OPTIONS":
+        response = web.Response(status=204)
+    else:
+        response = await handler(request)
+    origin = request.headers.get("Origin")
+    response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    response.headers["Access-Control-Allow-Methods"] = ALLOWED_CORS_METHODS
+    response.headers["Access-Control-Allow-Headers"] = ALLOWED_CORS_HEADERS
+    response.headers["Access-Control-Max-Age"] = "86400"
+    return response
+
+
+
+
 def make_app(node: Node):
-    app = web.Application()
+    """
+    Build aiohttp app and register routes.
+    """
+    app = web.Application(middlewares=[cors_middleware])
     app['node'] = node
     app.add_routes([
         web.post('/send', send_handler),
@@ -29,32 +58,55 @@ def make_app(node: Node):
     app.on_startup.append(on_startup)
     return app
 
+
 async def on_startup(app):
+    """
+    Initialize node DB and start background tasks when app launches.
+    """
     node = app['node']
     await node.init_db()
-    # Fix deprecated loop usage
+
+    # Start failure detection
     asyncio.create_task(rejoin_sync(node))
     asyncio.create_task(heartbeat_task(app))
     # Start consensus timers
     node.consensus = Consensus(node)
     node.consensus.start()
 
+    # Start redundancy catch-up
+    redundancy = RedundancyHandler(node)
+    asyncio.create_task(redundancy.catch_up())
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--id", required=True)
-    parser.add_argument("--peers", default="", help="comma separated peer URLs e.g. http://127.0.0.1:8001")
-    parser.add_argument("--replication_mode", choices=['async', 'sync_quorum'], default='async')
+    parser.add_argument("--peers", default="",
+                        help="comma separated peer URLs e.g. http://127.0.0.1:8001")
+    parser.add_argument("--replication_mode",
+                        choices=['async', 'sync_quorum'], default='async')
     parser.add_argument("--quorum", type=int, default=2)
     return parser.parse_args()
+
 
 def main():
     args = parse_args()
     peers = [x.strip() for x in args.peers.split(",") if x.strip()]
-    node = Node(args.host, args.port, args.id, peers, replication_quorum=args.quorum, replication_mode=args.replication_mode)
+    node = Node(
+        args.host,
+        args.port,
+        args.id,
+        peers,
+        replication_quorum=args.quorum,
+        replication_mode=args.replication_mode
+    )
     app = make_app(node)
     web.run_app(app, host=args.host, port=args.port)
 
+
 if __name__ == "__main__":
     main()
+
+

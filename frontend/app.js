@@ -13,6 +13,35 @@ const formatDate = (epochSeconds) => {
 
 const normalizeBaseUrl = (raw) => raw.trim().replace(/\/$/, "");
 
+const valueOrFallback = (value, fallbackValue) => {
+  if (value === undefined || value === null || value === "") {
+    return fallbackValue;
+  }
+  return value;
+};
+
+const getConsensus = (status) => {
+  if (!status || typeof status !== "object") {
+    return {};
+  }
+  const consensus = status.consensus;
+  if (!consensus || typeof consensus !== "object") {
+    return {};
+  }
+  return consensus;
+};
+
+const getPeerEntries = (status) => {
+  if (!status || typeof status !== "object") {
+    return [];
+  }
+  const peerStatus = status.peer_status;
+  if (!peerStatus || typeof peerStatus !== "object") {
+    return [];
+  }
+  return Object.entries(peerStatus);
+};
+
 function App() {
   const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
   const [status, setStatus] = useState(null);
@@ -35,16 +64,16 @@ function App() {
       if (showSpinner) {
         setLoadingStatus(true);
       }
-      const response = await fetch(`${url}/status`);
+      const response = await fetch(url + "/status");
       if (!response.ok) {
-        throw new Error(`Status request failed (${response.status})`);
+        throw new Error("Status request failed (" + response.status + ")");
       }
       const data = await response.json();
       setStatus(data);
       setStatusError(null);
     } catch (err) {
       setStatus(null);
-      setStatusError(err.message || String(err));
+      setStatusError(err && err.message ? err.message : String(err));
     } finally {
       if (showSpinner) {
         setLoadingStatus(false);
@@ -62,16 +91,17 @@ function App() {
       if (showSpinner) {
         setLoadingMessages(true);
       }
-      const response = await fetch(`${url}/messages`);
+      const response = await fetch(url + "/messages");
       if (!response.ok) {
-        throw new Error(`Messages request failed (${response.status})`);
+        throw new Error("Messages request failed (" + response.status + ")");
       }
       const data = await response.json();
-      setMessages(Array.isArray(data.messages) ? data.messages : []);
+      const nextMessages = Array.isArray(data.messages) ? data.messages : [];
+      setMessages(nextMessages);
       setMessagesError(null);
     } catch (err) {
       setMessages([]);
-      setMessagesError(err.message || String(err));
+      setMessagesError(err && err.message ? err.message : String(err));
     } finally {
       if (showSpinner) {
         setLoadingMessages(false);
@@ -118,88 +148,122 @@ function App() {
 
     setSendState({ loading: true, error: null, success: null });
     try {
-      const response = await fetch(`${url}/send`, {
+      const response = await fetch(url + "/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error(`Send request failed (${response.status})`);
+        throw new Error("Send request failed (" + response.status + ")");
       }
-      const data = await response.json();
-      const seqDisplay = typeof data.seq !== "undefined" ? ` #${data.seq}` : "";
-      setSendState({ loading: false, error: null, success: `Message accepted${seqDisplay}` });
-      setForm((prev) => ({ ...prev, payload: "", msg_id: "" }));
-      fetchMessages();
-      fetchStatus(false);
+      await response.json();
+      setSendState({ loading: false, error: null, success: "Message accepted by node" });
+      setForm({ sender: "", recipient: "", payload: "", msg_id: "" });
+      fetchMessages(false);
     } catch (err) {
-      setSendState({ loading: false, error: err.message || String(err), success: null });
+      setSendState({
+        loading: false,
+        error: err && err.message ? err.message : String(err),
+        success: null,
+      });
     }
   };
 
-  const peerEntries = status?.peer_status ? Object.entries(status.peer_status) : [];
+  const handleBaseUrlChange = (event) => {
+    setBaseUrl(event.target.value);
+  };
+
+  const togglePolling = () => {
+    setPolling((prev) => !prev);
+  };
+
+  const consensus = getConsensus(status);
+  const peerEntries = getPeerEntries(status);
+  const nodeIdLabel = valueOrFallback(status && status.node_id, "-");
+  const portLabel = valueOrFallback(status && status.port, "-");
+  const replicationModeLabel = valueOrFallback(status && status.replication_mode, "-");
+  const quorumLabel = valueOrFallback(status && status.quorum, "-");
+  const consensusRoleLabel = valueOrFallback(consensus.role, "-");
+  const consensusTermLabel = valueOrFallback(consensus.current_term, "-");
+  const leaderIdLabel = valueOrFallback(consensus.leader_id, "Unknown");
+  const leaderUrlLabel = valueOrFallback(consensus.leader_url, "Unknown");
 
   return (
-    <main>
-      <header>
-        <h1>Distributed Messaging Dashboard</h1>
-        <p>Monitor nodes, inspect replicated messages, and send your own payloads.</p>
+    <main className="layout">
+      <header className="page-header">
+        <h1>Messaging Cluster Dashboard</h1>
+        <p>Monitor node health, inspect replicated logs, and inject test traffic.</p>
       </header>
 
-      <div className="controls">
-        <input
-          type="text"
-          value={baseUrl}
-          onChange={(event) => setBaseUrl(event.target.value)}
-          placeholder="http://127.0.0.1:8000"
-          aria-label="Base API URL"
-        />
-        <button type="button" onClick={() => { fetchStatus(); fetchMessages(); }}>
-          Refresh Now
-        </button>
-        <button type="button" onClick={() => setPolling((current) => !current)}>
-          {polling ? "Auto-refresh: ON" : "Auto-refresh: OFF"}
-        </button>
-      </div>
+      <section className="card">
+        <h2>Cluster Connection</h2>
+        <div className="connection-controls">
+          <label htmlFor="baseUrl">Base API URL</label>
+          <input
+            id="baseUrl"
+            type="text"
+            value={baseUrl}
+            onChange={handleBaseUrlChange}
+            placeholder="http://127.0.0.1:8000"
+            spellCheck={false}
+          />
+          <button type="button" onClick={() => fetchStatus()} disabled={loadingStatus}>
+            Refresh Status
+          </button>
+          <button type="button" onClick={() => fetchMessages()} disabled={loadingMessages}>
+            Refresh Messages
+          </button>
+          <button type="button" onClick={togglePolling}>
+            {polling ? "Pause Auto-Refresh" : "Resume Auto-Refresh"}
+          </button>
+        </div>
+        {statusError ? <p className="error">{statusError}</p> : null}
+        {messagesError ? <p className="error">{messagesError}</p> : null}
+        {(loadingStatus || loadingMessages) && !statusError && !messagesError ? (
+          <p style={{ marginTop: "0.5rem" }}>Loading data from the node.</p>
+        ) : null}
+      </section>
 
       <section className="card">
-        <h2>Node Status</h2>
-        {loadingStatus ? <p>Loading status…</p> : null}
-        {statusError ? <p className="error">{statusError}</p> : null}
+        <h2>Node Overview</h2>
         {status ? (
           <>
             <div className="status-grid">
               <div className="status-item">
                 <span>Node ID</span>
-                <strong>{status.node_id ?? "-"}</strong>
+                <strong>{nodeIdLabel}</strong>
+              </div>
+              <div className="status-item">
+                <span>Host</span>
+                <strong>{valueOrFallback(status && status.host, "-")}</strong>
               </div>
               <div className="status-item">
                 <span>Port</span>
-                <strong>{status.port ?? "-"}</strong>
+                <strong>{portLabel}</strong>
               </div>
               <div className="status-item">
                 <span>Replication Mode</span>
-                <strong>{status.replication_mode ?? "-"}</strong>
+                <strong>{replicationModeLabel}</strong>
               </div>
               <div className="status-item">
                 <span>Quorum</span>
-                <strong>{status.quorum ?? "-"}</strong>
+                <strong>{quorumLabel}</strong>
               </div>
               <div className="status-item">
                 <span>Role</span>
-                <strong>{status.consensus?.role ?? "-"}</strong>
+                <strong>{consensusRoleLabel}</strong>
               </div>
               <div className="status-item">
                 <span>Current Term</span>
-                <strong>{status.consensus?.current_term ?? "-"}</strong>
+                <strong>{consensusTermLabel}</strong>
               </div>
               <div className="status-item">
                 <span>Leader</span>
-                <strong>{status.consensus?.leader_id ?? "Unknown"}</strong>
+                <strong>{leaderIdLabel}</strong>
               </div>
               <div className="status-item">
                 <span>Leader URL</span>
-                <strong>{status.consensus?.leader_url ?? "Unknown"}</strong>
+                <strong>{leaderUrlLabel}</strong>
               </div>
             </div>
 
@@ -212,17 +276,19 @@ function App() {
                   <div key={peerUrl} className="message">
                     <div className="message-header">
                       <strong>{peerUrl}</strong>
-                      <span>{health.alive ? "?? alive" : "?? unreachable"}</span>
+                      <span>{health && health.alive ? "alive" : "unreachable"}</span>
                     </div>
                     <div className="message-payload">
-                      Last OK: {formatDate(health.last_ok)}
+                      Last OK: {formatDate(health && health.last_ok)}
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </>
-        ) : (!loadingStatus && !statusError ? <p>Select a node and refresh to see status.</p> : null)}
+        ) : !loadingStatus && !statusError ? (
+          <p>Select a node and refresh to see status.</p>
+        ) : null}
       </section>
 
       <section className="card">
@@ -269,38 +335,48 @@ function App() {
           </div>
           <div>
             <button type="submit" disabled={sendState.loading}>
-              {sendState.loading ? "Sending…" : "Send Message"}
+              {sendState.loading ? "Sending..." : "Send Message"}
             </button>
           </div>
           {sendState.error ? <p className="error">{sendState.error}</p> : null}
-          {sendState.success ? <p style={{ color: "#047857", marginTop: "0.25rem" }}>{sendState.success}</p> : null}
+          {sendState.success ? (
+            <p style={{ color: "#047857", marginTop: "0.25rem" }}>{sendState.success}</p>
+          ) : null}
         </form>
       </section>
 
       <section className="card">
         <h2>Replicated Messages</h2>
-        {loadingMessages ? <p>Loading messages…</p> : null}
+        {loadingMessages ? <p>Loading messages...</p> : null}
         {messagesError ? <p className="error">{messagesError}</p> : null}
         {!loadingMessages && !messagesError ? (
           messages.length === 0 ? (
             <div className="empty-state">No messages yet. Send one above to get started.</div>
           ) : (
             <div className="messages">
-              {messages.map((msg) => (
-                <div className="message" key={msg.msg_id ?? msg.seq}>
-                  <div className="message-header">
-                    <span>Seq #{msg.seq} · {formatDate(msg.ts)}</span>
-                    <span>{msg.sender || "unknown"} ? {msg.recipient || "all"}</span>
-                  </div>
-                  <div className="message-payload">{msg.payload || ""}</div>
-                  {msg.msg_id ? (
-                    <div className="message-header" style={{ marginTop: "0.4rem" }}>
-                      <span>Message ID</span>
-                      <span>{msg.msg_id}</span>
+              {messages.map((msg) => {
+                const messageKey =
+                  msg && msg.msg_id !== undefined && msg.msg_id !== null && msg.msg_id !== ""
+                    ? msg.msg_id
+                    : msg && msg.seq;
+                const senderLabel = valueOrFallback(msg && msg.sender, "unknown");
+                const recipientLabel = valueOrFallback(msg && msg.recipient, "all");
+                return (
+                  <div className="message" key={messageKey}>
+                    <div className="message-header">
+                      <span>Seq #{msg && msg.seq} - {formatDate(msg && msg.ts)}</span>
+                      <span>{senderLabel} -> {recipientLabel}</span>
                     </div>
-                  ) : null}
-                </div>
-              ))}
+                    <div className="message-payload">{valueOrFallback(msg && msg.payload, "")}</div>
+                    {msg && msg.msg_id ? (
+                      <div className="message-header" style={{ marginTop: "0.4rem" }}>
+                        <span>Message ID</span>
+                        <span>{msg.msg_id}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           )
         ) : null}
