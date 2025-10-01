@@ -9,8 +9,8 @@ A fault-tolerant distributed messaging system prototype demonstrating core princ
 
 ### Prerequisites
 
-*   Python 3.7+
-*   `aiohttp` library (install with `pip install aiohttp`)
+*   Python 3.11+
+*   Libraries: `aiohttp`, `aiosqlite` (install with `pip install aiohttp aiosqlite`)
 
 ### Running the Nodes
 
@@ -72,5 +72,15 @@ The tests will execute in order, simulating a complete scenario:
 | `/messages` | GET | Retrieve all messages stored on this node |
 | `/status` | GET | Get detailed status of the node (id, peers, mode, etc.) |
 | `/sync` | POST | Synchronize messages from a given sequence number |
+
+### Consensus (Raft) additions
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/request_vote` | POST | Candidate requests a vote. Body: `{term, candidateId, candidateUrl, lastLogIndex, lastLogTerm}` |
+| `/append_entries` | POST | Leader heartbeat/append. Body: `{term, leaderId, leaderUrl, entries: []}` |
+
+Nodes expose their consensus state under `GET /status` in `consensus`:
+`{role, current_term, voted_for, leader_id, leader_url}`. Leaders send heartbeats every ~200ms; followers use randomized 300–600ms election timeouts.
 
 

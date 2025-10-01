@@ -1,0 +1,11 @@
+{
+  "name": "ds-messaging-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static React dashboard for the distributed messaging cluster.",
+  "scripts": {
+    "start": "python -m http.server 5173 --directory .",
+    "serve": "npm run start",
+    "dev": "npm run start"
+  }
+}
