@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class RedundancyHandler:
     """
     Ensures nodes that go offline eventually catch up with peers.
@@ -39,5 +40,3 @@ class RedundancyHandler:
             for peer in self.node.peers:
                 await self.sync_with_peer(peer)
             await asyncio.sleep(5)
-
-        
