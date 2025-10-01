@@ -99,15 +99,19 @@ A lightweight React dashboard lives in the `frontend/` folder. It talks to the r
 - Compose and send custom messages (sender, recipient, payload, optional message ID).
 - Watch the replicated log update in real time (auto-refresh can be toggled).
 - Point the UI at any node by changing the "Base API URL" field.
+
 ### Run it with npm
 
 Alternatively, from `frontend/` you can do:
+
 ```powershell
 npm install
 npm start
 ```
+
 This uses the `python -m http.server` script behind the scenes, so ensure `python` resolves in your shell.
 Or run the familiar alias:
+
 ```powershell
 npm run dev
 ```
