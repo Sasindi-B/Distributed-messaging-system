@@ -4,12 +4,12 @@
 
 ## Team Members
 
-| Name | Registration Number | Email | Responsibility |
-|------|---------------------|-------|----------------|
-| Member 1 | REG001 | member1@university.edu | Fault Tolerance |
-| Member 2 | REG002 | member2@university.edu | Data Replication & Consistency |
-| Member 3 | REG003 | member3@university.edu | Time Synchronization |
-| Member 4 | REG004 | member4@university.edu | Consensus & Agreement |
+| Name | Registration Number | Email | Responsibility |      
+|-|-----|---------------------|-------|----------------|
+| Member 1 | IT23651456 | IT23651456@my.sliit.lk | Fault Tolerance |
+| Member 2 | IT23749498 | IT23749498@my.sliit.lk | Data Replication & Consistency |
+| Member 3 | IT23736832 | IT23736832@my.sliit.lk | Time Synchronization |
+| Member 4 | IT23664708 | IT23664708@my.sliit.lk | Consensus & Agreement |
 
 ## Project Overview
 
@@ -45,7 +45,7 @@ Built with Python and AIOHTTP, the system features:
 - Out-of-order message reordering with configurable buffers
 - Timestamp correction with accuracy bounds
 
-<<<<<<< HEAD
+
 ✅ **Consensus & Agreement**
 - Full Raft implementation (elections, log replication, commits)
 - Randomized election timeouts (300-600ms)
