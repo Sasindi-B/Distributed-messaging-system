@@ -24,8 +24,9 @@ class RedundancyHandler:
                     if resp.status == 200:
                         data = await resp.json()
                         for msg in data.get("messages", []):
-                            seq = await self.node.store_message(msg)
-                            await self.node.commit_message(seq)
+                            seq, _, inserted = await self.node.store_message(msg)
+                            if inserted:
+                                self.node.commit_message(seq)
                         logger.info(
                             f"Synced {len(data.get('messages', []))} messages from {peer}"
                         )

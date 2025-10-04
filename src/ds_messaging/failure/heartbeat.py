@@ -34,15 +34,18 @@ async def heartbeat_task(app):
 async def rejoin_sync(node):
     max_seq = await node.get_max_seq()
     async with aiohttp.ClientSession() as sess:
-        # Use failure_detector to get alive peers
         alive_peers = node.failure_detector.get_alive_peers()
-        for p in alive_peers:
+        targets = alive_peers if alive_peers else node.peers
+        for p in targets:
             try:
                 async with sess.post(f"{p}/sync", json={"since": max_seq}, timeout=5.0) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         for m in data.get("messages", []):
-                            await node.store_message(m)
+                            seq, _, inserted = await node.store_message(m)
+                            if inserted:
+                                node.commit_message(seq)
+                        node.delivery_metrics['last_recovery_time'] = time.time()
                         return
             except Exception:
                 continue

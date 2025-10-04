@@ -17,6 +17,16 @@ from src.ds_messaging.failure.api import (
     sync_handler, messages_handler, status_handler,
     request_vote_handler, append_entries_handler
 )
+from src.ds_messaging.time.api import (
+    time_handler,
+    clock_status_handler,
+    sync_trigger_handler,
+    timestamp_correct_handler,
+    ordering_status_handler,
+    force_delivery_handler,
+    time_stats_handler,
+    reset_stats_handler,
+)
 
 from src.ds_messaging.replication.redundancy import RedundancyHandler
 
@@ -45,6 +55,7 @@ def make_app(node: Node):
     """
     app = web.Application(middlewares=[cors_middleware])
     app['node'] = node
+    app['background_tasks'] = []
     app.add_routes([
         web.post('/send', send_handler),
         web.post('/replicate', replicate_handler),
@@ -54,8 +65,17 @@ def make_app(node: Node):
         web.post('/sync', sync_handler),
         web.get('/messages', messages_handler),
         web.get('/status', status_handler),
+        web.get('/time', time_handler),
+        web.get('/clock', clock_status_handler),
+        web.post('/time/sync', sync_trigger_handler),
+        web.post('/time/correct', timestamp_correct_handler),
+        web.get('/ordering/status', ordering_status_handler),
+        web.post('/ordering/force_delivery', force_delivery_handler),
+        web.get('/time/stats', time_stats_handler),
+        web.post('/time/reset', reset_stats_handler),
     ])
     app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
     return app
 
 
@@ -67,15 +87,29 @@ async def on_startup(app):
     await node.init_db()
 
     # Start failure detection
-    asyncio.create_task(rejoin_sync(node))
-    asyncio.create_task(heartbeat_task(app))
+    rejoin_task = asyncio.create_task(rejoin_sync(node))
+    heartbeat = asyncio.create_task(heartbeat_task(app))
+    app['background_tasks'].extend([rejoin_task, heartbeat])
     # Start consensus timers
     node.consensus = Consensus(node)
     node.consensus.start()
 
     # Start redundancy catch-up
     redundancy = RedundancyHandler(node)
-    asyncio.create_task(redundancy.catch_up())
+    redundancy_task = asyncio.create_task(redundancy.catch_up())
+    app['background_tasks'].append(redundancy_task)
+
+    # Start periodic time synchronization
+    time_sync_task = asyncio.create_task(node.time_sync.sync_task(app))
+    app['background_tasks'].append(time_sync_task)
+
+
+async def on_cleanup(app):
+    tasks = app.get('background_tasks', [])
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def parse_args():
