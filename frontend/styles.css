@@ -1,0 +1,181 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #1f2933;
+  background-color: #f5f7fa;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+main {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem 3rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  margin-bottom: 0.5rem;
+  font-size: 2rem;
+}
+
+header p {
+  margin: 0;
+  color: #52606d;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.controls input[type="text"] {
+  flex: 1 1 240px;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+button {
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+button:disabled {
+  background-color: #9aa5b1;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  background-color: #1d4ed8;
+}
+
+.card {
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.35rem;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.status-item {
+  background-color: #f0f4f8;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+}
+
+.status-item span {
+  display: block;
+  font-size: 0.9rem;
+  color: #52606d;
+  margin-bottom: 0.25rem;
+}
+
+.status-item strong {
+  font-size: 1.05rem;
+}
+
+form {
+  display: grid;
+  gap: 1rem;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field-group label {
+  font-weight: 600;
+}
+
+input[type="text"],
+textarea {
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.messages {
+  display: grid;
+  gap: 0.75rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.message {
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  background-color: #f8fafc;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #52606d;
+}
+
+.message-payload {
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  white-space: pre-wrap;
+}
+
+.empty-state {
+  text-align: center;
+  color: #52606d;
+  padding: 1rem 0;
+}
+
+.error {
+  margin-top: 0.25rem;
+  color: #dc2626;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  header h1 {
+    font-size: 1.5rem;
+  }
+
+  .card {
+    padding: 1.25rem;
+  }
+}
