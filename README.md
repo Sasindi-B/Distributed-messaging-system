@@ -31,6 +31,7 @@ It is designed to simulate the core principles of real-world distributed messagi
   - dev — active development
   - feature branches: `feature/<name>`
 
+Time Synchronization added
 ## Local AIOHTTP Cluster + Consensus
 
 This repo includes a lightweight AIOHTTP-based messaging cluster with Raft-style leader election layered on top of the existing failure detector. It runs locally without ZooKeeper or Docker.
