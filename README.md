@@ -51,10 +51,7 @@ Built with Python and AIOHTTP, the system features:
 - Randomized election timeouts (300-600ms)
 - Batched append entries for efficiency
 - Persistent state storage in SQLite
-=======
-Time Synchronization added
-## Local AIOHTTP Cluster + Consensus
->>>>>>> 2d75d28246da8bc8a4a31d037b9f27002d479818
+
 
 ## Quick Start
 
@@ -529,24 +526,4 @@ Distributed-messaging-system/
 └── README.md                  # This file
 ```
 
-## License
 
-MIT License - see LICENSE file for details.
-
-## Acknowledgments
-
-This project implements concepts from:
-- **Raft Consensus**: Diego Ongaro & John Ousterhout (Stanford)
-- **Network Time Protocol**: David L. Mills
-- **Distributed Systems**: Martin Kleppmann, "Designing Data-Intensive Applications"
-
-## Support
-
-For issues or questions:
-1. Check this README and `docs/TEST_PROCEDURES.md`
-2. Review closed issues on GitHub
-3. Open a new issue with reproduction steps and logs
-
----
-
-**Built with ❤️ for CS4262 Distributed Systems Course**
