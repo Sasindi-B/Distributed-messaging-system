@@ -45,11 +45,16 @@ Built with Python and AIOHTTP, the system features:
 - Out-of-order message reordering with configurable buffers
 - Timestamp correction with accuracy bounds
 
+<<<<<<< HEAD
 ✅ **Consensus & Agreement**
 - Full Raft implementation (elections, log replication, commits)
 - Randomized election timeouts (300-600ms)
 - Batched append entries for efficiency
 - Persistent state storage in SQLite
+=======
+Time Synchronization added
+## Local AIOHTTP Cluster + Consensus
+>>>>>>> 2d75d28246da8bc8a4a31d037b9f27002d479818
 
 ## Quick Start
 
