@@ -20,6 +20,20 @@ const valueOrFallback = (value, fallbackValue) => {
   return value;
 };
 
+const formatNumber = (value, { defaultValue = "-", digits = 3 } = {}) => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) {
+    return defaultValue;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return defaultValue;
+  }
+  if (Math.abs(numeric) >= 1000) {
+    return numeric.toLocaleString();
+  }
+  return numeric.toFixed(digits);
+};
+
 const getConsensus = (status) => {
   if (!status || typeof status !== "object") {
     return {};
@@ -53,6 +67,12 @@ function App() {
   const [polling, setPolling] = useState(true);
   const [form, setForm] = useState({ sender: "", recipient: "", payload: "", msg_id: "" });
   const [sendState, setSendState] = useState({ loading: false, error: null, success: null });
+  const [messageFilters, setMessageFilters] = useState({ limit: "50", after: "", sender: "", recipient: "" });
+  const [timeSyncState, setTimeSyncState] = useState({ loading: false, success: null, error: null, details: null });
+  const [timeCorrectionForm, setTimeCorrectionForm] = useState({ timestamp: "", sender: "" });
+  const [timeCorrectionState, setTimeCorrectionState] = useState({ loading: false, result: null, error: null });
+  const [orderingState, setOrderingState] = useState({ loading: false, data: null, error: null });
+  const [forceDeliveryState, setForceDeliveryState] = useState({ loading: false, result: null, error: null });
 
   const fetchStatus = useCallback(async (showSpinner = true) => {
     const url = normalizeBaseUrl(baseUrl);
@@ -91,7 +111,19 @@ function App() {
       if (showSpinner) {
         setLoadingMessages(true);
       }
-      const response = await fetch(url + "/messages");
+      const params = new URLSearchParams();
+      const limitVal = parseInt(messageFilters.limit, 10);
+      params.set("limit", Number.isFinite(limitVal) && limitVal > 0 ? String(limitVal) : "50");
+      if (messageFilters.after.trim()) {
+        params.set("after", messageFilters.after.trim());
+      }
+      if (messageFilters.sender.trim()) {
+        params.set("sender", messageFilters.sender.trim());
+      }
+      if (messageFilters.recipient.trim()) {
+        params.set("recipient", messageFilters.recipient.trim());
+      }
+      const response = await fetch(`${url}/messages?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Messages request failed (" + response.status + ")");
       }
@@ -107,7 +139,7 @@ function App() {
         setLoadingMessages(false);
       }
     }
-  }, [baseUrl]);
+  }, [baseUrl, messageFilters]);
 
   useEffect(() => {
     fetchStatus();
@@ -124,6 +156,24 @@ function App() {
     }, 3500);
     return () => clearInterval(interval);
   }, [polling, fetchStatus, fetchMessages]);
+
+  useEffect(() => {
+    setTimeCorrectionForm((prev) => {
+      if (prev.timestamp && prev.timestamp.trim() !== "") {
+        return prev;
+      }
+      return { ...prev, timestamp: String(Math.round(Date.now() / 1000)) };
+    });
+  }, []);
+
+  const handleMessageFilterChange = (field) => (event) => {
+    const value = event.target.value;
+    setMessageFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const resetMessageFilters = () => {
+    setMessageFilters({ limit: "50", after: "", sender: "", recipient: "" });
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -146,19 +196,65 @@ function App() {
       body.msg_id = form.msg_id.trim();
     }
 
-    setSendState({ loading: true, error: null, success: null });
-    try {
-      const response = await fetch(url + "/send", {
+    const requestPayload = JSON.stringify(body);
+
+    const sendWithLeaderRedirect = async (targetUrl, allowRedirect) => {
+      const response = await fetch(targetUrl + "/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: requestPayload,
       });
-      if (!response.ok) {
-        throw new Error("Send request failed (" + response.status + ")");
+
+      if (response.status === 307) {
+        let redirectData = {};
+        try {
+          redirectData = await response.json();
+        } catch (_) {
+          redirectData = {};
+        }
+        const leaderUrl = typeof redirectData.leader_url === "string" ? redirectData.leader_url : null;
+        if (leaderUrl && allowRedirect) {
+          setBaseUrl((prev) => {
+            const normalized = normalizeBaseUrl(leaderUrl);
+            return normalized || prev;
+          });
+          return sendWithLeaderRedirect(normalizeBaseUrl(leaderUrl), false);
+        }
+        const reason = redirectData.reason || "node_is_not_leader";
+        throw new Error("Redirected to leader required: " + reason);
       }
-      await response.json();
+
+      if (!response.ok) {
+        let errorDetail = "";
+        try {
+          const errorJson = await response.json();
+          if (errorJson && errorJson.reason) {
+            errorDetail = ": " + errorJson.reason;
+          }
+        } catch (_) {
+          try {
+            const text = await response.text();
+            if (text) {
+              errorDetail = ": " + text;
+            }
+          } catch (_) {
+            errorDetail = "";
+          }
+        }
+        throw new Error("Send request failed (" + response.status + ")" + errorDetail);
+      }
+
+      return response.json();
+    };
+
+    setSendState({ loading: true, error: null, success: null });
+    try {
+      const result = await sendWithLeaderRedirect(url, true);
       setSendState({ loading: false, error: null, success: "Message accepted by node" });
       setForm({ sender: "", recipient: "", payload: "", msg_id: "" });
+      if (result && result.leader_url && normalizeBaseUrl(result.leader_url) !== normalizeBaseUrl(baseUrl)) {
+        setBaseUrl(normalizeBaseUrl(result.leader_url));
+      }
       fetchMessages(false);
     } catch (err) {
       setSendState({
@@ -171,6 +267,134 @@ function App() {
 
   const handleBaseUrlChange = (event) => {
     setBaseUrl(event.target.value);
+  };
+  const triggerTimeSync = async () => {
+    const url = normalizeBaseUrl(baseUrl);
+    if (!url) {
+      setTimeSyncState({ loading: false, success: null, error: "Set a base URL", details: null });
+      return;
+    }
+    setTimeSyncState({ loading: true, success: null, error: null, details: null });
+    try {
+      const response = await fetch(url + "/time/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result && result.message ? result.message : "Time sync failed");
+      }
+      setTimeSyncState({
+        loading: false,
+        success: result.message || "Time synchronization completed",
+        error: null,
+        details: result.sync_status || null,
+      });
+      fetchStatus(false);
+    } catch (err) {
+      setTimeSyncState({
+        loading: false,
+        success: null,
+        error: err && err.message ? err.message : String(err),
+        details: null,
+      });
+    }
+  };
+
+  const handleTimeCorrectionSubmit = async (event) => {
+    event.preventDefault();
+    const url = normalizeBaseUrl(baseUrl);
+    if (!url) {
+      setTimeCorrectionState({ loading: false, result: null, error: "Set a base URL" });
+      return;
+    }
+    const timestampValue = timeCorrectionForm.timestamp.trim();
+    if (!timestampValue) {
+      setTimeCorrectionState({ loading: false, result: null, error: "Enter a timestamp" });
+      return;
+    }
+    let numericTimestamp = Number(timestampValue);
+    if (!Number.isFinite(numericTimestamp)) {
+      setTimeCorrectionState({ loading: false, result: null, error: "Timestamp must be numeric" });
+      return;
+    }
+    setTimeCorrectionState({ loading: true, result: null, error: null });
+    try {
+      const payload = {
+        timestamp: numericTimestamp,
+      };
+      if (timeCorrectionForm.sender.trim()) {
+        payload.sender = timeCorrectionForm.sender.trim();
+      }
+      const response = await fetch(url + "/time/correct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result && result.message ? result.message : "Correction failed");
+      }
+      setTimeCorrectionState({ loading: false, result, error: null });
+    } catch (err) {
+      setTimeCorrectionState({
+        loading: false,
+        result: null,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
+  };
+
+  const fetchOrderingStatus = async () => {
+    const url = normalizeBaseUrl(baseUrl);
+    if (!url) {
+      setOrderingState({ loading: false, data: null, error: "Set a base URL" });
+      return;
+    }
+    setOrderingState({ loading: true, data: null, error: null });
+    try {
+      const response = await fetch(url + "/ordering/status");
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data && data.message ? data.message : "Failed to fetch ordering status");
+      }
+      setOrderingState({ loading: false, data, error: null });
+    } catch (err) {
+      setOrderingState({
+        loading: false,
+        data: null,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
+  };
+
+  const forceDelivery = async () => {
+    const url = normalizeBaseUrl(baseUrl);
+    if (!url) {
+      setForceDeliveryState({ loading: false, result: null, error: "Set a base URL" });
+      return;
+    }
+    setForceDeliveryState({ loading: true, result: null, error: null });
+    try {
+      const response = await fetch(url + "/ordering/force_delivery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result && result.message ? result.message : "Force delivery failed");
+      }
+      setForceDeliveryState({ loading: false, result, error: null });
+      fetchMessages(false);
+    } catch (err) {
+      setForceDeliveryState({
+        loading: false,
+        result: null,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
   };
 
   const togglePolling = () => {
@@ -187,6 +411,13 @@ function App() {
   const consensusTermLabel = valueOrFallback(consensus.current_term, "-");
   const leaderIdLabel = valueOrFallback(consensus.leader_id, "Unknown");
   const leaderUrlLabel = valueOrFallback(consensus.leader_url, "Unknown");
+  const committedSeqLabel = valueOrFallback(status && status.committed_seq, "-");
+  const commitIndexLabel = valueOrFallback(status && status.commit_index, "-");
+  const metrics = status && status.metrics ? status.metrics : {};
+  const timeSync = status && status.time_sync ? status.time_sync : {};
+  const recentDeliveries = Array.isArray(status && status.recent_deliveries)
+    ? status.recent_deliveries
+    : [];
 
   return (
     <main className="layout">
@@ -265,6 +496,14 @@ function App() {
                 <span>Leader URL</span>
                 <strong>{leaderUrlLabel}</strong>
               </div>
+              <div className="status-item">
+                <span>Committed Sequence</span>
+                <strong>{committedSeqLabel}</strong>
+              </div>
+              <div className="status-item">
+                <span>Commit Index</span>
+                <strong>{commitIndexLabel}</strong>
+              </div>
             </div>
 
             <h3 style={{ marginTop: "1.5rem" }}>Peer Health</h3>
@@ -289,6 +528,69 @@ function App() {
         ) : !loadingStatus && !statusError ? (
           <p>Select a node and refresh to see status.</p>
         ) : null}
+      </section>
+
+      <section className="card">
+        <h2>Delivery Metrics &amp; Time Sync</h2>
+        {status ? (
+          <>
+            <div className="status-grid">
+              <div className="status-item">
+                <span>Avg Store Latency (s)</span>
+                <strong>{formatNumber(metrics.average_store_latency)}</strong>
+              </div>
+              <div className="status-item">
+                <span>Avg Correction (s)</span>
+                <strong>{formatNumber(metrics.average_correction_magnitude)}</strong>
+              </div>
+              <div className="status-item">
+                <span>Last Recovery</span>
+                <strong>{formatDate(metrics.last_recovery_time)}</strong>
+              </div>
+              <div className="status-item">
+                <span>Time Sync</span>
+                <strong>{timeSync.synchronized ? "Synchronized" : "Not synced"}</strong>
+              </div>
+              <div className="status-item">
+                <span>Clock Offset (s)</span>
+                <strong>{formatNumber(timeSync.clock_offset)}</strong>
+              </div>
+              <div className="status-item">
+                <span>Sync Accuracy (s)</span>
+                <strong>{formatNumber(timeSync.sync_accuracy)}</strong>
+              </div>
+              <div className="status-item">
+                <span>Drift Rate (s/s)</span>
+                <strong>{formatNumber(timeSync.drift_rate, { digits: 6 })}</strong>
+              </div>
+              <div className="status-item">
+                <span>Last Sync</span>
+                <strong>{formatDate(timeSync.last_sync_time)}</strong>
+              </div>
+            </div>
+
+            <h3 style={{ marginTop: "1.5rem" }}>Peer Offsets</h3>
+            {timeSync.peer_offsets && Object.keys(timeSync.peer_offsets).length > 0 ? (
+              <div className="messages metrics-list">
+                {Object.entries(timeSync.peer_offsets).map(([peer, offset]) => (
+                  <div key={peer} className="message">
+                    <div className="message-header">
+                      <strong>{peer}</strong>
+                      <span>{formatNumber(offset)}</span>
+                    </div>
+                    <div className="message-payload">
+                      Delay: {formatNumber(timeSync.peer_delays && timeSync.peer_delays[peer])} s
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>No peer offset data available yet.</p>
+            )}
+          </>
+        ) : (
+          <p>Select a node to view metrics.</p>
+        )}
       </section>
 
       <section className="card">
@@ -347,6 +649,56 @@ function App() {
 
       <section className="card">
         <h2>Replicated Messages</h2>
+        <div className="filter-grid">
+          <div className="field-group">
+            <label htmlFor="filterLimit">Limit</label>
+            <input
+              id="filterLimit"
+              type="number"
+              min="1"
+              value={messageFilters.limit}
+              onChange={handleMessageFilterChange("limit")}
+            />
+          </div>
+          <div className="field-group">
+            <label htmlFor="filterAfter">After Seq</label>
+            <input
+              id="filterAfter"
+              type="text"
+              value={messageFilters.after}
+              onChange={handleMessageFilterChange("after")}
+              placeholder="e.g. 42"
+            />
+          </div>
+          <div className="field-group">
+            <label htmlFor="filterSender">Sender</label>
+            <input
+              id="filterSender"
+              type="text"
+              value={messageFilters.sender}
+              onChange={handleMessageFilterChange("sender")}
+              placeholder="filter by sender"
+            />
+          </div>
+          <div className="field-group">
+            <label htmlFor="filterRecipient">Recipient</label>
+            <input
+              id="filterRecipient"
+              type="text"
+              value={messageFilters.recipient}
+              onChange={handleMessageFilterChange("recipient")}
+              placeholder="filter by recipient"
+            />
+          </div>
+          <div className="filter-actions">
+            <button type="button" onClick={() => fetchMessages()} disabled={loadingMessages}>
+              Apply Filters
+            </button>
+            <button type="button" onClick={resetMessageFilters} disabled={loadingMessages}>
+              Reset
+            </button>
+          </div>
+        </div>
         {loadingMessages ? <p>Loading messages...</p> : null}
         {messagesError ? <p className="error">{messagesError}</p> : null}
         {!loadingMessages && !messagesError ? (
@@ -362,10 +714,10 @@ function App() {
                 const senderLabel = valueOrFallback(msg && msg.sender, "unknown");
                 const recipientLabel = valueOrFallback(msg && msg.recipient, "all");
                 return (
-                  <div className="message" key={messageKey}>
+                    <div className="message" key={messageKey}>
                     <div className="message-header">
                       <span>Seq #{msg && msg.seq} - {formatDate(msg && msg.ts)}</span>
-                      <span>{senderLabel} -> {recipientLabel}</span>
+                      <span>{senderLabel} &rarr; {recipientLabel}</span>
                     </div>
                     <div className="message-payload">{valueOrFallback(msg && msg.payload, "")}</div>
                     {msg && msg.msg_id ? (
@@ -380,6 +732,218 @@ function App() {
             </div>
           )
         ) : null}
+      </section>
+
+      {status ? (
+        <section className="card">
+          <h2>Recent Deliveries</h2>
+          {recentDeliveries.length === 0 ? (
+            <p>No recent deliveries recorded.</p>
+          ) : (
+            <div className="messages">
+              {recentDeliveries.map((delivery, index) => {
+                const key =
+                  delivery.msg_id ||
+                  (delivery.corrected_timestamp ? `delivery-${delivery.corrected_timestamp}` : `delivery-${index}`);
+                return (
+                  <div key={key} className="message">
+                    <div className="message-header">
+                      <span>{delivery.msg_id || "(no id)"}</span>
+                      <span>{delivery.sender || "unknown"}</span>
+                    </div>
+                    <div className="message-payload">
+                      Corrected: {formatDate(delivery.corrected_timestamp)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      <section className="card">
+        <h2>Time &amp; Ordering Controls</h2>
+        <div className="controls-grid">
+          <div className="control-block">
+            <h3>Manual Time Sync</h3>
+            <p>Request an immediate synchronization round with alive peers.</p>
+            <button type="button" onClick={triggerTimeSync} disabled={timeSyncState.loading}>
+              {timeSyncState.loading ? "Synchronizing..." : "Trigger Time Sync"}
+            </button>
+            {timeSyncState.error ? <p className="error">{timeSyncState.error}</p> : null}
+            {timeSyncState.success ? (
+              <div className="success-box">
+                <p>{timeSyncState.success}</p>
+                {timeSyncState.details ? (
+                  <dl className="definition-list">
+                    <div>
+                      <dt>Offset</dt>
+                      <dd>{formatNumber(timeSyncState.details.clock_offset)}</dd>
+                    </div>
+                    <div>
+                      <dt>Accuracy</dt>
+                      <dd>{formatNumber(timeSyncState.details.sync_accuracy)}</dd>
+                    </div>
+                    <div>
+                      <dt>Success Rate</dt>
+                      <dd>{formatNumber(timeSyncState.details.success_rate, { digits: 2 })}</dd>
+                    </div>
+                    <div>
+                      <dt>Attempts</dt>
+                      <dd>{valueOrFallback(timeSyncState.details.sync_attempts, "-")}</dd>
+                    </div>
+                  </dl>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="control-block">
+            <h3>Timestamp Correction</h3>
+            <p>Submit a timestamp to get corrected value and accuracy bounds.</p>
+            <form onSubmit={handleTimeCorrectionSubmit} className="inline-form">
+              <div className="field-group">
+                <label htmlFor="correctionTimestamp">Timestamp (seconds)</label>
+                <input
+                  id="correctionTimestamp"
+                  type="text"
+                  value={timeCorrectionForm.timestamp}
+                  placeholder={String(Math.round(Date.now() / 1000))}
+                  onChange={(event) =>
+                    setTimeCorrectionForm((prev) => ({ ...prev, timestamp: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="field-group">
+                <label htmlFor="correctionSender">Sender (optional)</label>
+                <input
+                  id="correctionSender"
+                  type="text"
+                  value={timeCorrectionForm.sender}
+                  onChange={(event) =>
+                    setTimeCorrectionForm((prev) => ({ ...prev, sender: event.target.value }))
+                  }
+                />
+              </div>
+              <button type="submit" disabled={timeCorrectionState.loading}>
+                {timeCorrectionState.loading ? "Correcting..." : "Correct Timestamp"}
+              </button>
+            </form>
+            {timeCorrectionState.error ? <p className="error">{timeCorrectionState.error}</p> : null}
+            {timeCorrectionState.result ? (
+              <div className="success-box">
+                <dl className="definition-list">
+                  <div>
+                    <dt>Original</dt>
+                    <dd>{formatNumber(timeCorrectionState.result.original_timestamp)}</dd>
+                  </div>
+                  <div>
+                    <dt>Corrected</dt>
+                    <dd>{formatNumber(timeCorrectionState.result.corrected_timestamp)}</dd>
+                  </div>
+                  <div>
+                    <dt>Accuracy</dt>
+                    <dd>
+                      {timeCorrectionState.result.estimated_accuracy &&
+                      typeof timeCorrectionState.result.estimated_accuracy === "object"
+                        ? JSON.stringify(timeCorrectionState.result.estimated_accuracy)
+                        : formatNumber(timeCorrectionState.result.estimated_accuracy)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="control-block">
+            <h3>Ordering Buffer</h3>
+            <p>Inspect and manage the ordering buffer for out-of-order arrivals.</p>
+            <div className="button-row">
+              <button type="button" onClick={fetchOrderingStatus} disabled={orderingState.loading}>
+                {orderingState.loading ? "Loading..." : "Fetch Status"}
+              </button>
+              <button type="button" onClick={forceDelivery} disabled={forceDeliveryState.loading}>
+                {forceDeliveryState.loading ? "Forcing..." : "Force Delivery"}
+              </button>
+            </div>
+            {orderingState.error ? <p className="error">{orderingState.error}</p> : null}
+            {orderingState.data ? (
+              <div className="status-grid narrow">
+                <div className="status-item">
+                  <span>Buffer Size</span>
+                  <strong>
+                    {valueOrFallback(
+                      orderingState.data.ordering_status
+                        ? orderingState.data.ordering_status.buffer_size
+                        : null,
+                      "-"
+                    )}
+                  </strong>
+                </div>
+                <div className="status-item">
+                  <span>Utilization</span>
+                  <strong>
+                    {formatNumber(
+                      orderingState.data.ordering_status
+                        ? orderingState.data.ordering_status.buffer_utilization
+                        : null
+                    )}
+                  </strong>
+                </div>
+                <div className="status-item">
+                  <span>Reordered</span>
+                  <strong>
+                    {valueOrFallback(
+                      orderingState.data.ordering_status
+                        ? orderingState.data.ordering_status.messages_reordered
+                        : null,
+                      "-"
+                    )}
+                  </strong>
+                </div>
+                <div className="status-item">
+                  <span>Deliverable</span>
+                  <strong>
+                    {valueOrFallback(
+                      orderingState.data.ordering_status
+                        ? orderingState.data.ordering_status.deliverable_messages_count
+                        : null,
+                      "-"
+                    )}
+                  </strong>
+                </div>
+              </div>
+            ) : null}
+            {orderingState.data && orderingState.data.ordering_status &&
+            Array.isArray(orderingState.data.ordering_status.sample_deliverable_messages) &&
+            orderingState.data.ordering_status.sample_deliverable_messages.length > 0 ? (
+              <details style={{ marginTop: "0.75rem" }}>
+                <summary>Sample Deliverable Messages</summary>
+                <div className="messages">
+                  {orderingState.data.ordering_status.sample_deliverable_messages.map((sample, index) => (
+                    <div key={sample.msg_id || `sample-${index}`} className="message">
+                      <div className="message-header">
+                        <span>{sample.msg_id || "(no id)"}</span>
+                        <span>{sample.sender || "unknown"}</span>
+                      </div>
+                      <div className="message-payload">
+                        Corrected: {formatDate(sample.corrected_timestamp)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+            {forceDeliveryState.error ? <p className="error">{forceDeliveryState.error}</p> : null}
+            {forceDeliveryState.result ? (
+              <div className="success-box">
+                <p>{forceDeliveryState.result.message || "Forced delivery executed"}</p>
+                <p>Delivered: {valueOrFallback(forceDeliveryState.result.delivered_count, "0")}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </section>
     </main>
   );
