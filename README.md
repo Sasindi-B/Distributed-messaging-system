@@ -1,4 +1,5 @@
 # Distributed-messaging-system
+
 Fault-tolerant distributed messaging system
 
 ## Project Overview
@@ -31,3 +32,4 @@ It is designed to simulate the core principles of real-world distributed messagi
   - dev — active development
   - feature branches: `feature/<name>`
 
+Time Synchronization added
