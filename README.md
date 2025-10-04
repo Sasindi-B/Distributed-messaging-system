@@ -52,9 +52,6 @@ Built with Python and AIOHTTP, the system features:
 - Batched append entries for efficiency
 - Persistent state storage in SQLite
 
-
-## Quick Start
-
 ## Quick Start
 
 ### Prerequisites
@@ -165,7 +162,6 @@ Client → Leader Node → Raft Consensus → Quorum Replication → Commit
             Available for Retrieval
 ```
 
-## API Reference
 
 ## API Reference
 
