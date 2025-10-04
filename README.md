@@ -4,12 +4,12 @@
 
 ## Team Members
 
-| Name | Registration Number | Email | Responsibility |      
-|-|-----|---------------------|-------|----------------|
-| Member 1 | IT23651456 | IT23651456@my.sliit.lk | Fault Tolerance |
-| Member 2 | IT23749498 | IT23749498@my.sliit.lk | Data Replication & Consistency |
-| Member 3 | IT23736832 | IT23736832@my.sliit.lk | Time Synchronization |
-| Member 4 | IT23664708 | IT23664708@my.sliit.lk | Consensus & Agreement |
+| Name     | Registration Number | Email                  | Responsibility                 |      
+|----------|---------------------|------------------------|--------------------------------|
+| Member 1 | IT23651456          | IT23651456@my.sliit.lk | Fault Tolerance                |
+| Member 2 | IT23749498          | IT23749498@my.sliit.lk | Data Replication & Consistency |
+| Member 3 | IT23736832          | IT23736832@my.sliit.lk | Time Synchronization           |
+| Member 4 | IT23664708          | IT23664708@my.sliit.lk | Consensus & Agreement          |
 
 ## Project Overview
 
